@@ -9,7 +9,7 @@ export const initialBooks = [
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788971968413.jpg",
     category: "동물",
     totalCount: 2,
-    availableCount: 1,
+    availableCount: 2,
   },
   {
     id: 2,
@@ -19,7 +19,7 @@ export const initialBooks = [
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788949110486.jpg",
     category: "동물",
     totalCount: 2,
-    availableCount: 1,
+    availableCount: 2,
   },
   {
     id: 3,
@@ -51,7 +51,7 @@ export const initialBooks = [
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788936446819.jpg",
     category: "가족",
     totalCount: 2,
-    availableCount: 0,
+    availableCount: 2,
   },
   {
     id: 6,
@@ -103,7 +103,7 @@ export const initialBooks = [
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788936455484.jpg",
     category: "친구",
     totalCount: 2,
-    availableCount: 0,
+    availableCount: 2,
   },
   {
     id: 11,
@@ -145,7 +145,7 @@ export const initialBooks = [
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788974742324.jpg",
     category: "감정",
     totalCount: 2,
-    availableCount: 1,
+    availableCount: 2,
   },
   {
     id: 15,
@@ -177,7 +177,7 @@ export const initialBooks = [
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9791198610652.jpg",
     category: "자연",
     totalCount: 2,
-    availableCount: 1,
+    availableCount: 2,
   },
   {
     id: 18,
@@ -187,7 +187,7 @@ export const initialBooks = [
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788952783097.jpg",
     category: "자연",
     totalCount: 2,
-    availableCount: 1,
+    availableCount: 2,
   },
   {
     id: 19,

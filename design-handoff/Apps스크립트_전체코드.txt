@@ -1,0 +1,138 @@
+// ============================================================
+// 우리 반 그림책 도서관 — 구글 시트 Apps Script (전체 교체용)
+// 이 파일의 내용을 전부 복사해서, Apps Script 편집기의 기존 코드를 모두 지우고 붙여 넣으세요.
+// ============================================================
+
+const TZ = 'Asia/Seoul';
+const RENT_SHEET = '대여기록';
+const REVIEW_SHEET = '한줄평';
+const RENT_HEADERS = ['신청시각', '대여일', '책 제목', '번호/별명', '반납예정일', '반납여부'];
+const REVIEW_HEADERS = ['신청시각', '책 제목', '번호/별명', '표정', '한 줄', '승인'];
+
+function ss_() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function sheet_(name, headers) {
+  let sh = ss_().getSheetByName(name);
+  if (!sh) sh = ss_().insertSheet(name);
+  if (sh.getLastRow() === 0) sh.appendRow(headers);
+  return sh;
+}
+
+// '대여기록' 탭이 없으면 기존 첫 번째 시트(시트1 등)를 사용하고, '반납여부' 열이 없으면 자동 추가
+function rentSheet_(createIfMissing) {
+  let sh = ss_().getSheetByName(RENT_SHEET);
+  if (!sh) {
+    const first = ss_().getSheets()[0];
+    if (first && first.getName() !== REVIEW_SHEET) {
+      sh = first;
+    } else if (createIfMissing) {
+      sh = ss_().insertSheet(RENT_SHEET);
+    }
+  }
+  if (!sh) return null;
+  if (sh.getLastRow() === 0) {
+    if (!createIfMissing) return null;
+    sh.appendRow(RENT_HEADERS);
+    return sh;
+  }
+  const lastCol = sh.getLastColumn();
+  if (lastCol > 0) {
+    const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+    const hasReturnCol = headers.some(function (h) {
+      return h.indexOf('반납') >= 0 && h.indexOf('예정') < 0;
+    });
+    if (!hasReturnCol) {
+      sh.getRange(1, lastCol + 1).setValue('반납여부');
+    }
+  }
+  return sh;
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// 모든 칸을 "텍스트"로 저장 (전화번호·번호 앞의 0이 사라지지 않게)
+function appendText_(sh, row) {
+  const r = sh.getLastRow() + 1;
+  sh.getRange(r, 1, 1, row.length).setNumberFormat('@').setValues([row]);
+}
+
+function isYes_(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase();
+  return ['o', 'y', 'yes', 'true', '1', '승인', '완료', '반납', '반납완료'].indexOf(s) >= 0;
+}
+
+// ── 저장: 대여 기록 / 한 줄 평 ──
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const d = JSON.parse(e.postData.contents);
+    const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
+    const borrower = d.borrower || d.nickname || d.name || '';
+
+    if (d.type === 'review') {
+      const sh = sheet_(REVIEW_SHEET, REVIEW_HEADERS);
+      appendText_(sh, [now, d.bookTitle || '', borrower, d.rating || '', String(d.comment || '').slice(0, 30), '']);
+    } else {
+      const sh = rentSheet_(true);
+      const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+      const row = headers.map(function (h) {
+        if (h.indexOf('시각') >= 0) return now;
+        if (h.indexOf('예정') >= 0) return d.returnDate || '';
+        if (h.indexOf('반납') >= 0) return '';
+        if (h.indexOf('대여일') >= 0 || h.indexOf('날짜') >= 0) return d.date || '';
+        if (h.indexOf('책') >= 0 || h.indexOf('도서') >= 0) return d.bookTitle || '';
+        if (h.indexOf('번호') >= 0 || h.indexOf('별명') >= 0 || h.indexOf('이름') >= 0 || h.indexOf('친구') >= 0) return borrower;
+        return '';
+      });
+      appendText_(sh, row);
+    }
+    return json_({ ok: true });
+  } catch (err) {
+    return json_({ ok: false, message: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── 읽기: 책별 대여 중 권수 + 선생님이 승인한 한 줄 평 ──
+function doGet(e) {
+  try {
+    const borrowedCounts = {};
+    const rs = rentSheet_(false);
+    if (rs && rs.getLastRow() > 1) {
+      const v = rs.getDataRange().getValues();
+      const h = v[0].map(String);
+      const ti = h.findIndex(function (x) { return x.indexOf('책') >= 0 || x.indexOf('도서') >= 0; });
+      const ri = h.findIndex(function (x) { return x.indexOf('반납') >= 0 && x.indexOf('예정') < 0; });
+      for (let i = 1; i < v.length; i++) {
+        const title = ti >= 0 ? String(v[i][ti] || '').trim() : '';
+        if (!title) continue;
+        if (ri >= 0 && isYes_(v[i][ri])) continue; // 반납 표시된 책은 제외
+        borrowedCounts[title] = (borrowedCounts[title] || 0) + 1;
+      }
+    }
+
+    const reviews = [];
+    const vs = ss_().getSheetByName(REVIEW_SHEET);
+    if (vs && vs.getLastRow() > 1) {
+      const v = vs.getDataRange().getValues();
+      for (let i = v.length - 1; i >= 1; i--) { // 최신 글이 먼저
+        if (!isYes_(v[i][5])) continue; // 승인(O)된 글만
+        reviews.push({
+          bookTitle: String(v[i][1] || ''),
+          borrower: String(v[i][2] || ''),
+          rating: String(v[i][3] || ''),
+          comment: String(v[i][4] || '')
+        });
+      }
+    }
+    return json_({ ok: true, borrowedCounts: borrowedCounts, reviews: reviews });
+  } catch (err) {
+    return json_({ ok: false, message: String(err) });
+  }
+}
